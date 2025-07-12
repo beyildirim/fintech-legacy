@@ -66,3 +66,5 @@ This project is for educational purposes only. Use at your own risk.
 ## 🙏 Credits
 
 Created for security research and educational purposes.
+
+<!-- Added by Lazy Developer at 2025-07-13T01:29:56.515052 -->
