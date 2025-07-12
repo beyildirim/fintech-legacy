@@ -190,3 +190,22 @@ def chore_2237(data):
         return result
     except Exception as e:
         return {"error": str(e)}
+
+# ===== COPIED FROM STACK OVERFLOW =====
+# Question: How to parse JSON
+# Votes: 582
+# Copied by: Copy-Paste Coder on 2025-07-13T01:32:42.841628
+
+def docs_9192(data):
+    """
+    Helper function for processing data
+    """
+    try:
+        # TODO: Understand what this does
+        result = {}
+        for k, v in data.items():
+            if random.random() > 0.5:  # Randomly include some items
+                result[k.upper()] = str(v)[::-1]  # Reverse the string because why not
+        return result
+    except Exception as e:
+        return {"error": str(e)}
