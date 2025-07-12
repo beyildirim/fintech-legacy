@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legacy FinTech Portal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"], input[type="password"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Legacy FinTech Portal</h1>
+        
+        <div id="login-form">
+            <h2>Login</h2>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" value="admin">
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" value="admin123">
+            </div>
+            <button onclick="login()">Login</button>
+            <div id="login-error" class="error"></div>
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <h2>Welcome, <span id="welcome-user"></span>!</h2>
+            <button onclick="logout()" style="background-color: #f44336;">Logout</button>
+            
+            <h3>Account Balance: $<span id="balance">0.00</span></h3>
+            
+            <div class="form-group">
+                <h3>Transfer Money</h3>
+                <label for="recipient">Recipient Username:</label>
+                <input type="text" id="recipient">
+                
+                <label for="amount">Amount:</label>
+                <input type="number" id="amount" step="0.01" min="0.01">
+                
+                <label for="description">Description:</label>
+                <input type="text" id="description" placeholder="Optional">
+                
+                <button onclick="transfer()">Transfer</button>
+                <div id="transfer-error" class="error"></div>
+            </div>
+            
+            <div id="transactions">
+                <h3>Recent Transactions</h3>
+                <div id="transactions-list"></div>
+            </div>
+            
+            <!-- Hidden admin panel - accessible if you know the URL -->
+            <div id="admin-panel" style="margin-top: 30px; padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                <h3>Admin Panel</h3>
+                <div class="form-group">
+                    <label for="admin-command">Run Command:</label>
+                    <input type="text" id="admin-command" placeholder="e.g., ls -la">
+                    <button onclick="runCommand()">Execute</button>
+                    <pre id="command-output" style="background: black; color: #0f0; padding: 10px; border-radius: 4px; overflow: auto;"></pre>
+                </div>
+                
+                <div class="form-group">
+                    <h4>Backup/Restore</h4>
+                    <button onclick="backupData()">Download Backup</button>
+                    <input type="file" id="backup-file" onchange="restoreData()">
+                    <div id="backup-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Store session data in localStorage (insecure!)
+        let currentUser = null;
+
+        // Check if user is already logged in
+        window.onload = function() {
+            const user = localStorage.getItem('currentUser');
+            if (user) {
+                currentUser = JSON.parse(user);
+                showDashboard();
+            }
+        };
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                // Insecure: Sending password in plain text
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.user;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    showDashboard();
+                } else {
+                    document.getElementById('login-error').textContent = data.error || 'Login failed';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                document.getElementById('login-error').textContent = 'An error occurred during login';
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('welcome-user').textContent = currentUser.username;
+            
+            // Load user data
+            loadUserData();
+            
+            // Show/hide admin panel based on user role
+            document.getElementById('admin-panel').style.display = currentUser.is_admin ? 'block' : 'none';
+        }
+
+        async function loadUserData() {
+            try {
+                // Insecure: No CSRF protection
+                const response = await fetch('/api/user/data');
+                const data = await response.json();
+                
+                if (data.balance !== undefined) {
+                    document.getElementById('balance').textContent = data.balance.toFixed(2);
+                }
+                
+                if (data.transactions) {
+                    const transactionsList = document.getElementById('transactions-list');
+                    transactionsList.innerHTML = data.transactions.map(tx => 
+                        `<div>${tx.timestamp}: $${tx.amount} - ${tx.description || 'No description'}</div>`
+                    ).join('');
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        async function transfer() {
+            const recipient = document.getElementById('recipient').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const description = document.getElementById('description').value || '';
+            
+            if (!recipient || isNaN(amount) || amount <= 0) {
+                document.getElementById('transfer-error').textContent = 'Invalid transfer details';
+                return;
+            }
+            
+            try {
+                // Insecure: No CSRF protection
+                const formData = new FormData();
+                formData.append('to_user', recipient);
+                formData.append('amount', amount);
+                formData.append('description', description);
+                
+                const response = await fetch('/api/transfer', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    document.getElementById('transfer-error').textContent = result.error;
+                } else {
+                    document.getElementById('transfer-error').textContent = '';
+                    document.getElementById('amount').value = '';
+                    document.getElementById('description').value = '';
+                    loadUserData(); // Refresh data
+                }
+            } catch (error) {
+                console.error('Transfer error:', error);
+                document.getElementById('transfer-error').textContent = 'An error occurred during transfer';
+            }
+        }
+
+        async function runCommand() {
+            const command = document.getElementById('admin-command').value;
+            if (!command) return;
+            
+            try {
+                // Insecure: Command injection vulnerability
+                const response = await fetch('/api/admin/run_command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `command=${encodeURIComponent(command)}`
+                });
+                
+                const output = await response.text();
+                document.getElementById('command-output').textContent = output;
+            } catch (error) {
+                console.error('Command error:', error);
+                document.getElementById('command-output').textContent = 'Error executing command';
+            }
+        }
+
+        async function backupData() {
+            try {
+                // Insecure: No authentication in the request
+                const response = await fetch('/api/admin/backup');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'backup.pkl';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } catch (error) {
+                console.error('Backup error:', error);
+                document.getElementById('backup-status').textContent = 'Error creating backup';
+            }
+        }
+
+        async function restoreData() {
+            const fileInput = document.getElementById('backup-file');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Insecure: No validation of backup file
+                const response = await fetch('/api/admin/restore', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                document.getElementById('backup-status').textContent = 
+                    result.success ? 'Restore successful' : (result.error || 'Restore failed');
+            } catch (error) {
+                console.error('Restore error:', error);
+                document.getElementById('backup-status').textContent = 'Error during restore';
+            }
+            
+            fileInput.value = ''; // Reset file input
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            currentUser = null;
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('login-form').reset();
+            document.getElementById('login-error').textContent = '';
+        }
+    </script>
+</body>
+</html>
